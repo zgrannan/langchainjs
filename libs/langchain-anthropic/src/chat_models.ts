@@ -44,10 +44,10 @@ type AnthropicTool = {
   input_schema: Record<string, unknown>;
 };
 
-type AnthropicMessage = Anthropic.MessageParam;
-type AnthropicMessageCreateParams = Anthropic.MessageCreateParamsNonStreaming;
+type AnthropicMessage = Anthropic.Beta.Tools.ToolsBetaMessageParam;
+type AnthropicMessageCreateParams = Anthropic.Beta.Tools.MessageCreateParamsNonStreaming;
 type AnthropicStreamingMessageCreateParams =
-  Anthropic.MessageCreateParamsStreaming;
+  Anthropic.Beta.Tools.MessageCreateParamsStreaming;
 type AnthropicMessageStreamEvent = Anthropic.MessageStreamEvent;
 type AnthropicRequestOptions = Anthropic.RequestOptions;
 
@@ -55,7 +55,7 @@ interface ChatAnthropicCallOptions extends BaseLanguageModelCallOptions {
   tools?: StructuredToolInterface[] | AnthropicTool[];
 }
 
-type AnthropicMessageResponse = Anthropic.ContentBlock | AnthropicToolResponse;
+type AnthropicMessageResponse = Anthropic.Beta.Tools.ToolsBetaContentBlock | AnthropicToolResponse;
 
 function _formatImage(imageUrl: string) {
   const regex = /^data:(image\/.+);base64,(.+)$/;
@@ -546,6 +546,13 @@ export class ChatAnthropicMessages<
               type: "text" as const, // Explicitly setting the type as "text"
               text: contentPart.text,
             };
+          } else if (contentPart.type === "tool_use") {
+            return {
+              type: "tool_use" as const,
+              id: contentPart.id,
+              name: contentPart.name,
+              input: contentPart.input,
+            }
           } else {
             throw new Error("Unsupported message content format");
           }
@@ -554,7 +561,13 @@ export class ChatAnthropicMessages<
           role,
           content: contentBlocks,
         };
+      } else if (Array.isArray(message.content)) {
+        return {
+          role,
+          content: message.content
+        } as AnthropicMessage;
       } else {
+        console.error("Could not find type in", message.content);
         throw new Error("Unsupported message content format");
       }
     });
@@ -568,8 +581,8 @@ export class ChatAnthropicMessages<
   async _generateNonStreaming(
     messages: BaseMessage[],
     params: Omit<
-      | Anthropic.Messages.MessageCreateParamsNonStreaming
-      | Anthropic.Messages.MessageCreateParamsStreaming,
+      | Anthropic.Beta.Tools.Messages.MessageCreateParamsNonStreaming
+      | Anthropic.Beta.Tools.Messages.MessageCreateParamsStreaming,
       "messages"
     > &
       Kwargs,
@@ -667,7 +680,7 @@ export class ChatAnthropicMessages<
       });
     }
     const makeCompletionRequest = async () =>
-      this.streamingClient.messages.create(
+      this.streamingClient.beta.tools.messages.create(
         {
           ...request,
           ...this.invocationKwargs,
@@ -682,7 +695,7 @@ export class ChatAnthropicMessages<
   protected async completionWithRetry(
     request: AnthropicMessageCreateParams & Kwargs,
     options: AnthropicRequestOptions
-  ): Promise<Anthropic.Message> {
+  ): Promise<Anthropic.Beta.Tools.ToolsBetaMessage> {
     if (!this.anthropicApiKey) {
       throw new Error("Missing Anthropic API key.");
     }
@@ -696,7 +709,7 @@ export class ChatAnthropicMessages<
       });
     }
     const makeCompletionRequest = async () =>
-      this.batchClient.messages.create(
+      this.batchClient.beta.tools.messages.create(
         {
           ...request,
           ...this.invocationKwargs,
